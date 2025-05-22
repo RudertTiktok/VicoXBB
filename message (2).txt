@@ -40,6 +40,59 @@ local manualSpamSpeed = 10
 local pingBased = true
 local TargetSelectionMethod = ""
 setfpscap(60);
+
+local Auto_Parry = {
+    target = { current = nil, from = nil, aim = nil },
+    ball = {
+        properties = {
+            aero_dynamic_time = tick(),
+            last_position = Vector3.zero,
+            rotation = Vector3.zero,
+            distance = 0,
+            speed = 0,
+            velocity = Vector3.new(),
+            direction = Vector3.new(),
+            dot = 0,
+            maximum_speed = 0,
+            last_hit = 0,
+            parries = 0,
+            spam_range = 0,
+            parry_range = 0,
+            auto_spam = false,
+            is_spam = false,
+            cooldown = false,
+            last_warping = tick(),
+            is_curved = false,
+            hell_hook_completed = true,
+            last_curve_position = Vector3.new(),
+            last_warping = 0,
+            lerp_radians = 0,
+            radians = 0,
+            old_speed = 0,
+            position = Vector3.new()
+        },
+        ball_entity = nil
+    },
+    entity_properties = { distance = 0, velocity = Vector3.new(), direction = Vector3.new(), server_position = Vector3.zero, is_moving = false, speed = 0, dot = 0 },
+    Spam_Sensitivity = 50,
+    Ping_Based_Spam = true,
+    Parry_Type = "Default"
+}
+
+local Player = {
+    Entity = {
+        properties = {
+            ping = 0,
+            sword = "",
+            server_position = Vector3.zero,
+            velocity = Vector3.zero,
+            speed = 0,
+            is_moving = false,
+            grab_animation = nil
+        }
+    }
+}
+
 task.spawn(function()
     for _, Value in getgc() do
         if type(Value) == 'function' and islclosure(Value) then
@@ -900,18 +953,18 @@ AutoSpam:OnChanged(function(v)
                                 local ballSpeed = math.max(ballVelocity, 0)
                                 local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
                                 local pingThreshold = math.clamp(ping / 10, 10, 16)
-                                local ballProperties = Auto_Parry:Get_Ball_Properties() or {}
-                                local entityProperties = Auto_Parry:Get_Entity_Properties() or {}
+                                local ballProperties = Auto_Parry.Ball.Properties
+                                local entityProperties = Auto_Parry.Entity.Properties
 
-                                -- Logika is_spam
-                                local is_spam = false
+                
+                                local is_spam = Auto_Parry.ball.properties.is_spam
                                 do
                                     local target = targetPlayer
                                     if not target then
                                         is_spam = false
                                     else
                                         if not Auto_Parry.target then
-                                            Auto_Parry.target = {}
+                                            AutoParry.target = {}
                                         end
 
                                         if Auto_Parry.target.from ~= LocalPlayer.Character then
@@ -989,7 +1042,7 @@ AutoSpam:OnChanged(function(v)
                                     Ping_Based_Spam = Auto_Parry.Ping_Based_Spam
                                 })
 
-                                if is_spam and (zoomies.Parent == ball) and ((playerDistance <= 50) or (targetDistance <= 50)) and (parries > 1) then -- Jarak diperlonggar ke 50
+                                if is_spam and (zoomies.Parent == ball) then
                                     Auto_Parry.Parry()
                                     parries = parries + 1
                                 end
@@ -1005,16 +1058,16 @@ AutoSpam:OnChanged(function(v)
                     end
                 end
             end
-            task.wait(0.002) -- Dipercepat dari 0.005 untuk respons lebih baik
+            task.wait(0.002)
         end
     end)
 
     coroutine.resume(autoSpamCoroutine)
-elseif autoSpamCoroutine then
-    coroutine.resume(autoSpamCoroutine, "stop")
-    autoSpamCoroutine = nil
-end
-
+	elseif autoSpamCoroutine then
+		coroutine.resume(autoSpamCoroutine, "stop")
+		autoSpamCoroutine = nil
+	end
+end);
 
 ManualSpam()
 local Toggle = Tabs.Main:AddToggle("MyToggle",
