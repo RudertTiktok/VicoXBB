@@ -872,62 +872,139 @@ local autoSpamCoroutine = nil;
 local targetPlayer = nil;
 AutoSpam:OnChanged(function(v)
 	if v then
-		if autoSpamCoroutine then
-			coroutine.resume(autoSpamCoroutine, "stop")
-			autoSpamCoroutine = nil
-		end
+    if autoSpamCoroutine then
+        coroutine.resume(autoSpamCoroutine, "stop")
+        autoSpamCoroutine = nil
+    end
 
-		autoSpamCoroutine = coroutine.create(function(signal)
-			while AutoSpam.Value and (signal ~= "stop") do
-				local ball = Auto_Parry.Get_Ball()
-				if ball and ball:IsDescendantOf(workspace) then
-					local zoomies = ball:FindFirstChild("zoomies")
-					if zoomies then
-						Auto_Parry.Closest_Player()
-						targetPlayer = Closest_Entity
+    autoSpamCoroutine = coroutine.create(function(signal)
+        local old_from_target = nil
+        local parries = 1 -- Inisialisasi Parries, sesuai dengan kode pertama
 
-						if targetPlayer and targetPlayer.PrimaryPart and targetPlayer:IsDescendantOf(workspace) then
-							local playerDistance = LocalPlayer:DistanceFromCharacter(ball.Position)
-							local targetPosition = targetPlayer.PrimaryPart.Position
-							local targetDistance = LocalPlayer:DistanceFromCharacter(targetPosition)
+        while AutoSpam.Value and (signal ~= "stop") do
+            local ball = Auto_Parry.Get_Ball()
+            if ball and ball:IsDescendantOf(workspace) then
+                local zoomies = ball:FindFirstChild("zoomies")
+                if zoomies then
+                    Auto_Parry.Closest_Player()
+                    targetPlayer = Closest_Entity
 
-							if targetPlayer.Parent then
-								if ball:IsDescendantOf(workspace) and (ball.Position.Magnitude >= 1) then
-									local ballVelocity = ball.Velocity.Magnitude
-									local ballSpeed = math.max(ballVelocity, 0)
-									local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
-									local pingThreshold = math.clamp(ping / 10, 10, 16)
-									local ballProperties = Auto_Parry:Get_Ball_Properties()
-									local entityProperties = Auto_Parry:Get_Entity_Properties()
+                    if targetPlayer and targetPlayer.PrimaryPart and targetPlayer:IsDescendantOf(workspace) then
+                        local playerDistance = LocalPlayer:DistanceFromCharacter(ball.Position)
+                        local targetPosition = targetPlayer.PrimaryPart.Position
+                        local targetDistance = LocalPlayer:DistanceFromCharacter(targetPosition)
 
-									local spamAccuracy = Auto_Parry.Spam_Service({
-										Ball_Properties = ballProperties,
-										Entity_Properties = entityProperties,
-										Ping = pingThreshold,
-										Spam_Sensitivity = Auto_Parry.Spam_Sensitivity,
-										Ping_Based_Spam = Auto_Parry.Ping_Based_Spam
-									})
+                        if targetPlayer.Parent then
+                            if ball:IsDescendantOf(workspace) and (ball.Position.Magnitude >= 1) then
+                                local ballVelocity = ball.Velocity.Magnitude
+                                local ballSpeed = math.max(ballVelocity, 0)
+                                local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+                                local pingThreshold = math.clamp(ping / 10, 10, 16)
+                                local ballProperties = Auto_Parry:Get_Ball_Properties()
+                                local entityProperties = Auto_Parry:Get_Entity_Properties()
 
-									if (zoomies.Parent == ball) and ((playerDistance <= 30) or (targetDistance <= 30)) and (Parries > 1) then
-										Auto_Parry.Parry()
-									end
-								else
-									local waitTime = 0
-									repeat
-										task.wait(0.1)
-										waitTime = waitTime + 0.1
-										ball = Auto_Parry.Get_Ball()
-									until (ball and ball:IsDescendantOf(workspace) and (ball.Position.Magnitude > 1)) or (waitTime >= 2.5)
-								end
-							end
-						end
-					end
-				end
-				task.wait(0.001)
-			end
-		end)
+                                -- Integrasi logika is_spam
+                                local is_spam = false
+                                do
+                                    local target = targetPlayer -- Simulasi AutoParry.target.current
+                                    if not target then
+                                        is_spam = false
+                                    else
+                                        if Auto_Parry.target.from ~= LocalPlayer.Character then
+                                            old_from_target = Auto_Parry.target.from
+                                        end
 
-		coroutine.resume(autoSpamCoroutine)
+                                        if parries < 3 and Auto_Parry.target.from == old_from_target then
+                                            is_spam = false
+                                        else
+                                            local distance_threshold = 18 + (ping / 80)
+                                            local reach_time = ballProperties.distance / ballProperties.maximum_speed - (ping / 1000)
+
+                                            if (tick() - Auto_Parry.last_hit) > 0.8 and targetDistance > distance_threshold and parries < 3 then
+                                                parries = 1
+                                                is_spam = false
+                                            elseif ballProperties.lerp_radians > 0.028 then
+                                                if parries > 3 then
+                                                    parries = 1
+                                                end
+                                                is_spam = false
+                                            elseif (tick() - ballProperties.last_warping) < (reach_time / 1.3) and targetDistance > distance_threshold and parries < 4 then
+                                                if parries > 3 then
+                                                    parries = 1
+                                                end
+                                                is_spam = false
+                                            elseif math.abs(ballSpeed - Auto_Parry.old_speed) < 5.2 and targetDistance > distance_threshold and ballSpeed < 60 and parries < 3 then
+                                                if parries > 3 then
+                                                    parries = 0
+                                                end
+                                                is_spam = false
+                                            elseif ballSpeed < 10 then
+                                                parries = 1
+                                                is_spam = false
+                                            elseif ballProperties.maximum_speed < ballSpeed and targetDistance > distance_threshold then
+                                                parries = 1
+                                                is_spam = false
+                                            elseif targetDistance > Auto_Parry.range and targetDistance > distance_threshold then
+                                                if parries > 2 then
+                                                    parries = 1
+                                                end
+                                                is_spam = false
+                                            elseif playerDistance > Auto_Parry.range and targetDistance > distance_threshold then
+                                                if parries > 2 then
+                                                    parries = 2
+                                                end
+                                                is_spam = false
+                                            elseif Auto_Parry.last_position_distance > Auto_Parry.spam_accuracy and targetDistance > distance_threshold then
+                                                if parries > 4 then
+                                                    parries = 2
+                                                end
+                                                is_spam = false
+                                            elseif playerDistance > Auto_Parry.spam_accuracy and playerDistance > distance_threshold then
+                                                if parries > 3 then
+                                                    parries = 2
+                                                end
+                                                is_spam = false
+                                            elseif targetDistance > Auto_Parry.spam_accuracy and targetDistance > (distance_threshold - math.pi) then
+                                                if parries > 3 then
+                                                    parries = 2
+                                                end
+                                                is_spam = false
+                                            else
+                                                is_spam = true
+                                            end
+                                        end
+                                    end
+                                end
+
+                                local spamAccuracy = Auto_Parry.Spam_Service({
+                                    Ball_Properties = ballProperties,
+                                    Entity_Properties = entityProperties,
+                                    Ping = pingThreshold,
+                                    Spam_Sensitivity = Auto_Parry.Spam_Sensitivity,
+                                    Ping_Based_Spam = Auto_Parry.Ping_Based_Spam
+                                })
+
+                                if is_spam and (zoomies.Parent == ball) and ((playerDistance <= 30) or (targetDistance <= 30)) and (parries > 1) then
+                                    Auto_Parry.Parry()
+                                    parries = parries + 1
+                                end
+                            else
+                                local waitTime = 0
+                                repeat
+                                    task.wait(0.1)
+                                    waitTime = waitTime + 0.1
+                                    ball = Auto_Parry.Get_Ball()
+                                until (ball and ball:IsDescendantOf(workspace) and (ball.Position.Magnitude > 1)) or (waitTime >= 2.5)
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(0.01) -- Diperpanjang dari 0.001 untuk mengurangi beban
+        end
+    end)
+
+    coroutine.resume(autoSpamCoroutine)
 	elseif autoSpamCoroutine then
 		coroutine.resume(autoSpamCoroutine, "stop")
 		autoSpamCoroutine = nil
