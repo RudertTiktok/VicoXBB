@@ -879,7 +879,7 @@ AutoSpam:OnChanged(function(v)
 
     autoSpamCoroutine = coroutine.create(function(signal)
         local old_from_target = nil
-        local parries = 1 -- Inisialisasi Parries, sesuai dengan kode pertama
+        local parries = 1 -- Inisialisasi Parries
 
         while AutoSpam.Value and (signal ~= "stop") do
             local ball = Auto_Parry.Get_Ball()
@@ -900,16 +900,20 @@ AutoSpam:OnChanged(function(v)
                                 local ballSpeed = math.max(ballVelocity, 0)
                                 local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
                                 local pingThreshold = math.clamp(ping / 10, 10, 16)
-                                local ballProperties = Auto_Parry:Get_Ball_Properties()
-                                local entityProperties = Auto_Parry:Get_Entity_Properties()
+                                local ballProperties = Auto_Parry:Get_Ball_Properties() or {}
+                                local entityProperties = Auto_Parry:Get_Entity_Properties() or {}
 
-                                -- Integrasi logika is_spam
+                                -- Logika is_spam
                                 local is_spam = false
                                 do
-                                    local target = targetPlayer -- Simulasi AutoParry.target.current
+                                    local target = targetPlayer
                                     if not target then
                                         is_spam = false
                                     else
+                                        if not Auto_Parry.target then
+                                            Auto_Parry.target = {}
+                                        end
+
                                         if Auto_Parry.target.from ~= LocalPlayer.Character then
                                             old_from_target = Auto_Parry.target.from
                                         end
@@ -917,54 +921,55 @@ AutoSpam:OnChanged(function(v)
                                         if parries < 3 and Auto_Parry.target.from == old_from_target then
                                             is_spam = false
                                         else
-                                            local distance_threshold = 18 + (ping / 80)
-                                            local reach_time = ballProperties.distance / ballProperties.maximum_speed - (ping / 1000)
+                                            local distance_threshold = 25 + (ping / 80) -- Diperlonggar dari 18
+                                            local reach_time = (ballProperties.distance or 100) / (ballProperties.maximum_speed or 50) - (ping / 1000)
 
-                                            if (tick() - Auto_Parry.last_hit) > 0.8 and targetDistance > distance_threshold and parries < 3 then
+                                            local last_hit = Auto_Parry.last_hit or 0
+                                            if (tick() - last_hit) > 0.8 and targetDistance > distance_threshold and parries < 3 then
                                                 parries = 1
                                                 is_spam = false
-                                            elseif ballProperties.lerp_radians > 0.028 then
+                                            elseif (ballProperties.lerp_radians or 0) > 0.028 then
                                                 if parries > 3 then
                                                     parries = 1
                                                 end
                                                 is_spam = false
-                                            elseif (tick() - ballProperties.last_warping) < (reach_time / 1.3) and targetDistance > distance_threshold and parries < 4 then
+                                            elseif (tick() - (ballProperties.last_warping or 0)) < (reach_time / 1.3) and targetDistance > distance_threshold and parries < 4 then
                                                 if parries > 3 then
                                                     parries = 1
                                                 end
                                                 is_spam = false
-                                            elseif math.abs(ballSpeed - Auto_Parry.old_speed) < 5.2 and targetDistance > distance_threshold and ballSpeed < 60 and parries < 3 then
+                                            elseif math.abs(ballSpeed - (Auto_Parry.old_speed or ballSpeed)) < 5.2 and targetDistance > distance_threshold and ballSpeed < 60 and parries < 3 then
                                                 if parries > 3 then
                                                     parries = 0
                                                 end
                                                 is_spam = false
-                                            elseif ballSpeed < 10 then
+                                            elseif ballSpeed < 5 then -- Diperlonggar dari 10
                                                 parries = 1
                                                 is_spam = false
-                                            elseif ballProperties.maximum_speed < ballSpeed and targetDistance > distance_threshold then
+                                            elseif (ballProperties.maximum_speed or 50) < ballSpeed and targetDistance > distance_threshold then
                                                 parries = 1
                                                 is_spam = false
-                                            elseif targetDistance > Auto_Parry.range and targetDistance > distance_threshold then
+                                            elseif targetDistance > (Auto_Parry.range or 50) and targetDistance > distance_threshold then -- Range diperlonggar ke 50
                                                 if parries > 2 then
                                                     parries = 1
                                                 end
                                                 is_spam = false
-                                            elseif playerDistance > Auto_Parry.range and targetDistance > distance_threshold then
+                                            elseif playerDistance > (Auto_Parry.range or 50) and targetDistance > distance_threshold then
                                                 if parries > 2 then
                                                     parries = 2
                                                 end
                                                 is_spam = false
-                                            elseif Auto_Parry.last_position_distance > Auto_Parry.spam_accuracy and targetDistance > distance_threshold then
+                                            elseif (Auto_Parry.last_position_distance or 0) > (Auto_Parry.spam_accuracy or 100) and targetDistance > distance_threshold then -- Spam_accuracy diperlonggar ke 100
                                                 if parries > 4 then
                                                     parries = 2
                                                 end
                                                 is_spam = false
-                                            elseif playerDistance > Auto_Parry.spam_accuracy and playerDistance > distance_threshold then
+                                            elseif playerDistance > (Auto_Parry.spam_accuracy or 100) and playerDistance > distance_threshold then
                                                 if parries > 3 then
                                                     parries = 2
                                                 end
                                                 is_spam = false
-                                            elseif targetDistance > Auto_Parry.spam_accuracy and targetDistance > (distance_threshold - math.pi) then
+                                            elseif targetDistance > (Auto_Parry.spam_accuracy or 100) and targetDistance > (distance_threshold - math.pi) then
                                                 if parries > 3 then
                                                     parries = 2
                                                 end
@@ -984,7 +989,7 @@ AutoSpam:OnChanged(function(v)
                                     Ping_Based_Spam = Auto_Parry.Ping_Based_Spam
                                 })
 
-                                if is_spam and (zoomies.Parent == ball) and ((playerDistance <= 30) or (targetDistance <= 30)) and (parries > 1) then
+                                if is_spam and (zoomies.Parent == ball) and ((playerDistance <= 50) or (targetDistance <= 50)) and (parries > 1) then -- Jarak diperlonggar ke 50
                                     Auto_Parry.Parry()
                                     parries = parries + 1
                                 end
@@ -1000,16 +1005,15 @@ AutoSpam:OnChanged(function(v)
                     end
                 end
             end
-            task.wait(0.01) -- Diperpanjang dari 0.001 untuk mengurangi beban
+            task.wait(0.002) -- Dipercepat dari 0.005 untuk respons lebih baik
         end
     end)
 
     coroutine.resume(autoSpamCoroutine)
-	elseif autoSpamCoroutine then
-		coroutine.resume(autoSpamCoroutine, "stop")
-		autoSpamCoroutine = nil
-	end
-end);
+elseif autoSpamCoroutine then
+    coroutine.resume(autoSpamCoroutine, "stop")
+    autoSpamCoroutine = nil
+end
 
 
 ManualSpam()
